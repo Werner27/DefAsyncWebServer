@@ -1,0 +1,8 @@
+Nächste Arbeiten:
+1. HTMLviaCode Zurück Button oder Menüleiste OK
+2. HTMLviaSPIFFS Beispiel Seite  entfernen OK
+3. Status Seite im Code erstellen mit yasm
+4. Konfigurationsseite erstellen im SPIFFS
+5. Websocket einbauen
+6. EEPROM's speicher und lesen
+7. In github ablegen.

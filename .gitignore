@@ -1,0 +1,19 @@
+# PlatformIO
+.pio/
+.vscode/
+*.pyc
+__pycache__/
+*.swp
+
+# SPIFFS
+data/
+spiffs.bin
+
+# Arduino
+*.ino.*
+*.hex
+*.elf
+
+# OS
+.DS_Store
+Thumbs.db

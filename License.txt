@@ -1,0 +1,13 @@
+
+---
+
+## 📜 2. `LICENSE.txt`
+
+```text
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+
+Diese Software darf frei verwendet, verändert und weitergegeben werden – jedoch nicht für kommerzielle Zwecke.
+
+Es wird keine Garantie für Funktion, Sicherheit oder Eignung übernommen.
+
+Weitere Informationen: https://creativecommons.org/licenses/by-nc-sa/4.0/
