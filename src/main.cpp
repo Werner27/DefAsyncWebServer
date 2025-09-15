@@ -39,7 +39,7 @@ void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
 
 void setup() {
   Serial.begin(115200);
-  myWebServer.setCredentials("Fischer", "fasmotioN1234");
+  myWebServer.setCredentials("YOUR_SSID", "YOUR_PASSWORD"); // Hier deine WLAN-Zugangsdaten eintragen
   myWebServer.begin();
 }
 
