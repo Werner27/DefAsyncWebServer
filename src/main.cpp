@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "WebServerClass.h"
 #include <SPIFFS.h>
+#include <ConfigManager.h>
 
 
 // Erstelle ein Objekt deiner Webserver-Klasse
@@ -39,7 +40,6 @@ void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
 
 void setup() {
   Serial.begin(115200);
-  myWebServer.setCredentials("YOUR_SSID", "YOUR_PASSWORD"); // Hier deine WLAN-Zugangsdaten eintragen
   myWebServer.begin();
 }
 

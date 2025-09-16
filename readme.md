@@ -1,3 +1,4 @@
+![ESP32 WebServer Banner](https://copilot.microsoft.com/th/id/BCO.ffa190d9-0025-4ddc-82db-f891fea569e9.png)
 # ESP32 WebServer Basisprojekt
 
 Dieses Projekt stellt eine wiederverwendbare WebServer-Klasse für den ESP32 bereit, die als Grundlage für zukünftige IoT- und Webinterface-Projekte dient.

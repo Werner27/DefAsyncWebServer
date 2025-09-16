@@ -1,0 +1,24 @@
+<div class="content">
+  <h2>WLAN-Konfiguration</h2>
+  <p><strong>Aktuelle IP:</strong> %CUR_IP% | <strong>Subnetz:</strong> %CUR_SUB%</p>
+
+  <form action="/save_config" method="POST">
+    <fieldset class="block">
+      <legend>Client (STA) Einstellungen</legend>
+      <div class="row"><label>SSID:</label><input type="text" name="sta_ssid" value="%STA_SSID%"></div>
+      <div class="row"><label>Passwort:</label><input type="password" name="sta_pass"></div>
+      <div class="row"><label>Nach Senden neu starten:</label><input type="checkbox" name="sta_reboot"></div>
+      <div class="row button-row"><button class="btn">Speichern</button></div>
+    </fieldset>
+  </form>
+
+  <form action="/save_ap" method="POST">
+    <fieldset class="block">
+      <legend>Access Point (AP) Einstellungen</legend>
+      <div class="row"><label>AP SSID:</label><input type="text" name="ap_ssid" value="%AP_SSID%"></div>
+      <div class="row"><label>AP Passwort:</label><input type="password" name="ap_pass"></div>
+      <div class="row"><label>Nach Senden neu starten:</label><input type="checkbox" name="ap_reboot"></div>
+      <div class="row button-row"><button class="btn">Speichern</button></div>
+    </fieldset>
+  </form>
+</div>

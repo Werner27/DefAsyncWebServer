@@ -4,6 +4,7 @@
 #include <ElegantOTA.h>
 #include "html_template.h"
 #include "html_pages.h"
+#include <ConfigManager.h>
 
 WebServerClass::WebServerClass()
 : _server(80), _ws("/ws") {}
@@ -16,21 +17,24 @@ void WebServerClass::setCredentials(const String& ssid, const String& password) 
 void WebServerClass::begin() {
     Serial.begin(115200);
     pinMode(_ledPin, OUTPUT);
-    digitalWrite(_ledPin, HIGH);
+    digitalWrite(_ledPin, LOW);
 
     if (!SPIFFS.begin(true)) {
         Serial.println("Fehler beim Mounten von SPIFFS");
     }
 
+    ConfigManager::begin();
+    if (_ssid.isEmpty() || _password.isEmpty()) {
+        Serial.println("Keine WLAN-Daten gesetzt, lese aus ConfigManager...");
+        loadEEPROMText();
+    }
     connectOrStartAP();
 
     // Statische Assets
-    _server.serveStatic("/favicon.ico", SPIFFS, "/favicon.ico");
+    // _server.serveStatic("/favicon-96x96.png", SPIFFS, "/favicon-96x96.png");
     _server.serveStatic("/style.css",   SPIFFS, "/style.css");
     _server.serveStatic("/script.js",   SPIFFS, "/script.js");
     _server.serveStatic("/images",      SPIFFS, "/images");
-
-    loadEEPROMText();
 
     setupWebSocket();
     setupRoutes();
@@ -81,7 +85,7 @@ void WebServerClass::connectOrStartAP() {
         return;
     }
 
-    Serial.printf("🔌 Verbinde zu %s ...\n", _ssid.c_str());
+    Serial.printf("🔌 Verbinde zu %s, %s ...\n", _ssid.c_str(), _password.c_str());
     WiFi.mode(WIFI_STA);
     WiFi.begin(_ssid.c_str(), _password.c_str());
 
@@ -227,6 +231,33 @@ void WebServerClass::setupRoutes() {
     });
 
     // Daten entgegennehmen (ohne EEPROM, nur merken/anzeigen)
+    _server.on("/save_ap", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        auto getP = [&](const String& name)->String{
+            return request->hasParam(name, true) ? request->getParam(name, true)->value() : "";
+        };
+        String newApSsid  = getP("ap_ssid");
+        String newApPass  = getP("ap_pass");
+        String apReboot   = getP("ap_reboot");
+
+        if (newApSsid.length()) _apSsid = newApSsid;
+        if (newApPass.length()) _apPassword = newApPass;
+
+        Serial.printf("[CONFIG] AP: ssid=%s pass=%s\n",
+                       _apSsid.c_str(), _apPassword.c_str());
+        Serial.println("[EEPROM_WRITE] (Platzhalter) – Werte würden hier gespeichert werden.");
+
+        bool doReboot = (apReboot == "on");
+
+        String msg = "Konfiguration AP gespeichert.";
+        if (doReboot) {
+            msg += " Neustart in 2 Sekunden...";
+            _pendingRestartAt = millis() + 2000;
+        }
+        request->redirect("/config");
+        // request->send(200, "text/plain", msg);
+    });
+
+    // Daten entgegennehmen (ohne EEPROM, nur merken/anzeigen)
     _server.on("/save_config", HTTP_POST, [this](AsyncWebServerRequest *request) {
         auto getP = [&](const String& name)->String{
             return request->hasParam(name, true) ? request->getParam(name, true)->value() : "";
@@ -236,21 +267,15 @@ void WebServerClass::setupRoutes() {
         String newStaPass = getP("sta_pass");
         String staReboot  = getP("sta_reboot"); // "on" wenn Checkbox
 
-        String newApSsid  = getP("ap_ssid");
-        String newApPass  = getP("ap_pass");
-        String apReboot   = getP("ap_reboot");
-
         if (newStaSsid.length()) _ssid = newStaSsid;
         if (newStaPass.length()) _password = newStaPass;
 
-        if (newApSsid.length()) _apSsid = newApSsid;
-        if (newApPass.length()) _apPassword = newApPass;
-
         Serial.printf("[CONFIG] STA: ssid=%s pass=%s | AP: ssid=%s pass=%s\n",
                       _ssid.c_str(), _password.c_str(), _apSsid.c_str(), _apPassword.c_str());
-        Serial.println("[EEPROM_WRITE] (Platzhalter) – Werte würden hier gespeichert werden.");
+        // Serial.println("[EEPROM_WRITE] (Platzhalter) – Werte würden hier gespeichert werden.");
+        saveEEPROMText();
 
-        bool doReboot = (staReboot == "on") || (apReboot == "on");
+        bool doReboot = (staReboot == "on");
 
         String msg = "Konfiguration gespeichert.";
         if (doReboot) {
@@ -313,10 +338,20 @@ void WebServerClass::sendDynamicFile(AsyncWebServerRequest *request,
 
 // Nur Marker – du setzt hier später deine EEPROM-Klasse ein
 void WebServerClass::loadEEPROMText() {
-    Serial.println("[EEPROM_READ] Platzhalter – hier später Implementierung einfügen.");
+//    Serial.println("[EEPROM_READ] Platzhalter – hier später Implementierung einfügen.");
+    WifiConf wifiConf;
+    ConfigManager::readWifiConf(wifiConf);
+    _ssid = String(wifiConf.ssid);
+    _password = String(wifiConf.password);
+    Serial.printf("Gelesene WLAN-Daten: SSID='%s', PASS='%s'\n", _ssid.c_str(), _password.c_str());
 }
-void WebServerClass::saveEEPROMText(const String& data) {
-    Serial.println("[EEPROM_WRITE] Platzhalter – hier später Implementierung einfügen.");
+void WebServerClass::saveEEPROMText() {
+    // Serial.println("[EEPROM_WRITE] Platzhalter – hier später Implementierung einfügen.");
+    WifiConf wifiConf;
+    strncpy(wifiConf.ssid, _ssid.c_str(), sizeof(wifiConf.ssid));
+    strncpy(wifiConf.password, _password.c_str(), sizeof(wifiConf.password));
+    ConfigManager::writeWifiConf(wifiConf);
+    Serial.printf("Gespeicherte WLAN-Daten: SSID='%s', PASS='%s'\n", _ssid.c_str(), _password.c_str());
 }
 
 // Helfer
