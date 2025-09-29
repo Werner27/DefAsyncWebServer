@@ -64,9 +64,9 @@ nav a:hover { background: #ddd; color: #000; }
 /* Formulare & Felder */
 .block {
   border: 1px solid #ccc;
-  padding: 10px;
-  margin: 10px auto;
-  max-width: 420px;
+  padding: 5px;
+  margin: 5px auto;
+  max-width: 800px;
 }
 .row {
   display: flex;
@@ -97,3 +97,7 @@ nav a:hover { background: #ddd; color: #000; }
   cursor: pointer;
 }
 .btn:hover { background: #555; }
+
+
+
+
