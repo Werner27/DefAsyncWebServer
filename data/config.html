@@ -1,112 +1,44 @@
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 40px;
-    }
-    .form-container {
-        background: #9ca19b;
-        padding: 10px;
-        max-width: 900px;
-        margin: 8px auto;   
-    }
-    .form-group {
-        display: flex;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .form-group label {
-        width: 180px;
-        text-align: right;
-        margin-right: 8px;
-        font-weight: bold;
-    }
-    .form-group input[type="text"],
-    .form-group input[type="password"] {
-        flex: 1;
-        padding: 8px;
-        font-size: 16px;
-        box-sizing: border-box;
-    }
-    /* Passwortfeld mit Icon */
-    .password-wrapper {
-        position: relative;
-        flex: 1;
-    }
-    .password-wrapper input {
-        width: 100%;
-        padding-right: 35px;
-    }
-    .toggle-password {
-        position: absolute;
-        top: 50%;
-        right: 10px;
-        transform: translateY(-50%);
-        cursor: pointer;
-        user-select: none;
-        font-size: 18px;
-    }
-    /* Checkbox-Ausrichtung */
-    .checkbox-group {
-        display: flex;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .checkbox-group label {
-        width: 180px;
-        text-align: right;
-        margin-right: 10px;
-        font-weight: bold;
-    }
-    .checkbox-group input[type="checkbox"] {
-        margin-left: auto;
-        transform: scale(1.2);
-    }
-    /* Button rechtsbündig */
-    .form-actions {
-        text-align: right;
-    }
-    button {
-        padding: 10px 20px;
-        font-size: 16px;
-        cursor: pointer;
-    }
 </style>
-
 <div class="form-container">
   
   <h2>WLAN-Konfiguration</h2>
   <p><strong>Aktuelle IP:</strong> %CUR_IP% | <strong>Subnetz:</strong> %CUR_SUB%</p>
 
-  <form action="/save_config" method="POST">
+  <form action="/save_sta" method="POST">
     <fieldset class="block">
       <legend>Client (STA) Einstellungen</legend>
       <div class="form-group"><label>SSID:</label><input type="text" name="sta_ssid" value="%STA_SSID%"></div>
       <div class="form-group"><label>Passwort:</label>
         <div class="password-wrapper">
-          <input type="password" name="sta_pass" id="sta_pass">
+          <input type="password" name="sta_pass" id="sta_pass" value="%STA_PASS%">
             <span class="toggle-password" onclick="togglePassword('sta_pass', this)">👁️</span>
         </div>        
       </div>
+      <div class="form-group"><label>IP-Adr:</label><input type="text" name="sta_ip" value="%IP_ADR%"></div>
+      <div class="form-group"><label>SN-Mask:</label><input type="text" name="sta_sn" value="%SN_MASK%"></div>
       <div class="checkbox-group"><label>Nach Senden neu starten:</label><input type="checkbox" name="sta_reboot" id="sta_reboot"></div>
-      <div class="form-actions"><button type="submit">Speichern</button></div>
+      <div class="form-actions"><button class="btn01" type="submit">Speichern</button></div>
     </fieldset>
   </form>
 
   <form action="/save_ap" method="POST">
     <fieldset class="block">
       <legend>Access Point (AP) Einstellungen</legend>
-      <div class="form-group"><label>AP SSID:</label><input type="text" name="ap_ssid" value="%AP_SSID%"></div>
+      <div class="form-group"><label>SSID:</label><input type="text" name="ap_ssid" value="%AP_SSID%"></div>
       <div class="form-group"><label>Passwort:</label>
         <div class="password-wrapper">
-          <input type="password" name="ap_pass" id="ap_pass">
+          <input type="password" name="ap_pass" id="ap_pass" value="%AP_PASS%">
             <span class="toggle-password" onclick="togglePassword('ap_pass', this)">👁️</span>
         </div>        
       </div>
+      <div class="form-group"><label>IP-Adr:</label><input type="text" name="ap_ip" value="%AP_IP_ADR%"></div>
+      <div class="form-group"><label>GW-Adr:</label><input type="text" name="ap_gw" value="%AP_GW_ADR%"></div>
+      <div class="form-group"><label>SN-Mask:</label><input type="text" name="ap_sn" value="%AP_SN_MASK%"></div>
       <div class="checkbox-group"><label>Nach Senden neu starten:</label><input type="checkbox" name="ap_reboot"></div>
-      <div class="form-actions"><button type="submit">Speichern</button></div>
+      <div class="form-actions"><button class="btn01" type="submit">Speichern</button></div>
     </fieldset>
   </form>
-  </div>
 </div>
 <script>
 function togglePassword(id, icon) {

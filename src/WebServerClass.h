@@ -14,17 +14,21 @@ public:
     void loop();
 
     void setCredentials(const String& ssid, const String& password);
-    void loadEEPROMText();
-    void saveEEPROMText();
+    void loadEEPROMText(String &text);
+    void saveEEPROMText(const String &text);
+    void loadEEPROMWifiConf(bool ap = false);
+    void saveEEPROMWifiConf(bool ap = false);
 
 private:
     // Web
     AsyncWebServer _server;
     AsyncWebSocket _ws;
 
-    // STA (Client) Credentials
+    // Standalone (STA) (Client) Credentials
     String _ssid;
     String _password;
+    IPAddress  _locIP;
+    IPAddress  _locSN;
 
     // AP Settings
     String _apSsid = "ESP32-Setup";
@@ -56,7 +60,7 @@ private:
                          const std::map<String, String> &replacements = {});
     void sendDynamicFile(AsyncWebServerRequest *request,
                          const char* path,
-                         const std::map<String, String> &values = {});
+                         const std::map<String, String> &replacements = {});
 
     // Helfer für Anzeige auf Config-Seite
     String currentIP();

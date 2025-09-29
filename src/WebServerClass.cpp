@@ -26,12 +26,13 @@ void WebServerClass::begin() {
     ConfigManager::begin();
     if (_ssid.isEmpty() || _password.isEmpty()) {
         Serial.println("Keine WLAN-Daten gesetzt, lese aus ConfigManager...");
-        loadEEPROMText();
+        loadEEPROMWifiConf(false);
+        loadEEPROMWifiConf(true); // AP-Daten laden
     }
     connectOrStartAP();
 
     // Statische Assets
-    // _server.serveStatic("/favicon-96x96.png", SPIFFS, "/favicon-96x96.png");
+    _server.serveStatic("/favicon-96x96.png", SPIFFS, "/favicon-96x96.png");
     _server.serveStatic("/style.css",   SPIFFS, "/style.css");
     _server.serveStatic("/script.js",   SPIFFS, "/script.js");
     _server.serveStatic("/images",      SPIFFS, "/images");
@@ -120,7 +121,7 @@ void WebServerClass::setupWebSocket() {
                        AwsEventType type, void *arg, uint8_t *data, size_t len) {
 
         if (type == WS_EVT_CONNECT) {
-            Serial.println("WebSocket verbunden");
+            DBG_PRINTLN("WebSocket verbunden");
             client->text("{\"status\":\"verbunden\"}");
             return;
         }
@@ -138,27 +139,27 @@ void WebServerClass::setupWebSocket() {
 
             if (doc["blink"].is<bool>()) {
                 _blinkState = doc["blink"];
-                Serial.println(_blinkState ? "Blinken aktiviert" : "Blinken deaktiviert");
+                DBG_PRINTLN(_blinkState ? "Blinken aktiviert" : "Blinken deaktiviert");
             }
             if (doc["led"].is<bool>()) {
                 _ledState = doc["led"];
                 digitalWrite(_ledPin, _ledState ? HIGH : LOW);
-                Serial.println(_ledState ? "LED AN" : "LED AUS");
+                DBG_PRINTLN(_ledState ? "LED AN" : "LED AUS");
             }
         }
     });
-
     _server.addHandler(&_ws);
 }
 
 void WebServerClass::setupRoutes() {
-    auto sendPage = [this](AsyncWebServerRequest *request, const char* content) {
+    auto sendPage = [this](AsyncWebServerRequest *request, 
+                        const char* content, 
+                        const std::map<String, String> &replacements) {
         String output = html_template;
         output.replace("_BODY_CONTENT_", content);
-        output.replace("%COUNTER_VALUE%", String(_counter));
-        output.replace("%EEPROM_TEXT%", _eepromText);
-        output.replace("%SET_COUNTER%", String("1.12f"));
-        output.replace("%CUR_COUNTER%", String("0"));
+        for (const auto& pair : replacements) {
+            output.replace("%" + pair.first + "%", pair.second);
+        }
         request->send(200, "text/html", output);
     };
 
@@ -166,29 +167,60 @@ void WebServerClass::setupRoutes() {
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->redirect("/index");
     });
-
-    // Alte Startseite über SPIFFS template.html + /index.html (falls vorhanden)
+    //----------------------------------------------------------------------------
+    // Startseite erstellt mit html_template und index.html
+    //----------------------------------------------------------------------------
     _server.on("/index", HTTP_GET, [this](AsyncWebServerRequest *request) {
         std::map<String, String> values = {
             {"UPTIME", String(millis() / 1000)}
         };
         sendDynamicFile(request, "/index.html", values);
     });
-
-    // Submenu Demo
-    _server.on("/submenu01", HTTP_GET, [=](AsyncWebServerRequest *request){
-        sendPage(request, submenu01_content);
+    //----------------------------------------------------------------------------
+    // Status-Seite erstellt mit htm_template und status_content aus html_pages.h
+    //----------------------------------------------------------------------------
+    _server.on("/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        ConfigManager::readString(_eepromText);
+        std::map<String, String> replacements = {
+            {"EEPROM_TEXT", _eepromText},
+            {"SET_COUNTER", "0"},
+            {"CUR_COUNTER", String(_counter)}
+        };
+        sendDynamicPage(request, status_content, replacements);
     });
+    // Daten entgegennehmen und in EEPROM speichern
+    _server.on("/save_eeprom", HTTP_POST, [this](AsyncWebServerRequest *request){
+        if (request->hasParam("data", true)) {
+            String receivedData = request->getParam("data", true)->value();
+            if (_eepromText != receivedData) {
+                _eepromText = receivedData;
 
+                // [EEPROM_WRITE] -> hier später mit deiner EEPROM-Klasse ersetzen
+                ConfigManager::writeString(_eepromText);
+                Serial.println("EEPROM-Text geändert: " + receivedData);
+            }
+            request->send(200, "text/plain", "OK");
+        } else {
+            request->send(400, "text/plain", "Bad Request");
+        }
+    });
+    // Zähler zurücksetzen
+    _server.on("/counter_reset", HTTP_GET, [this](AsyncWebServerRequest *request){
+        _counter = 0;
+        request->send(200, "text/plain", "Ok");
+    });
+    // Zähler neu setzen
+    _server.on("/set_counter", HTTP_POST, [this](AsyncWebServerRequest *request){
+        if (request->hasParam("data", true)) {
+            String receivedData = request->getParam("data", true)->value();
+            _counter = receivedData.toInt();
+        }
+        request->send(200, "text/plain", "Ok");
+    });
     // Counter endpoints
     _server.on("/counter", HTTP_GET, [this](AsyncWebServerRequest *request){
         request->send(200, "text/plain", String(_counter));
     });
-    _server.on("/counterReset", HTTP_GET, [=](AsyncWebServerRequest *request){
-        _counter = 0;
-        request->send(200, "text/plain", "Ok");
-    });
-
     // JSON-Status
     _server.on("/status.json", HTTP_GET, [this](AsyncWebServerRequest *request) {
         JsonDocument doc;
@@ -204,47 +236,78 @@ void WebServerClass::setupRoutes() {
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
-
-    // Status-Seite (HTML, wie zuvor)
-    _server.on("/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        std::map<String, String> dynValues = {
-            {"%SET_COUNTER%", "22.5"},
-            {"%CUR_COUNTER%", String(_counter)}
-        };
-        sendDynamicPage(request, status_content, dynValues);
-    });
-
-    // WebSocket Demo Seite (umbenannt: websocket.html)
+    //----------------------------------------------------------------------------
+    // WebSocket Demo Seite websocket.html
+    //----------------------------------------------------------------------------
     _server.on("/websocket", HTTP_GET, [this](AsyncWebServerRequest *request) {
         sendDynamicFile(request, "/websocket.html", {});
     });
-
-    // Konfiguration (Datei-basiert, wie index)
+    //----------------------------------------------------------------------------
+    // Konfiguration Seite erstellt mit html_template und index.html
+    //----------------------------------------------------------------------------
     _server.on("/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        std::map<String, String> values = {
-            {"STA_SSID",  (WiFi.getMode() & WIFI_STA) ? WiFi.SSID() : _ssid},
-            {"AP_SSID",   _apSsid},
+        std::map<String, String> replacements = {
             {"CUR_IP",    currentIP()},
-            {"CUR_SUB",   currentSubnet()}
+            {"CUR_SUB",   currentSubnet()},
+            {"STA_SSID",  (WiFi.getMode() & WIFI_STA) ? WiFi.SSID() : _ssid},
+            {"STA_PASS",   _password},
+            {"IP_ADR",    _locIP.toString()},
+            {"SN_MASK",    _locSN.toString()},
+            {"AP_SSID",   _apSsid},
+            {"AP_PASS",   _apPassword},
+            {"AP_IP_ADR", _apIP.toString()},
+            {"AP_GW_ADR", _apGW.toString()},
+            {"AP_SN_MASK",_apSN.toString()}    
         };
-        sendDynamicFile(request, "/config.html", values);
+        sendDynamicFile(request, "/config.html", replacements);
     });
+    //------------ Speichern der Client (STA) Konfiguration ----------------
+    _server.on("/save_sta", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        auto getP = [&](const String& name)->String{
+            return request->hasParam(name, true) ? request->getParam(name, true)->value() : "";
+        };
+        String newStaSsid = getP("sta_ssid");
+        String newStaPass = getP("sta_pass");
+        String newStaIP = getP("sta_ip");
+        String newStaSN = getP("sta_sn");
+        String staReboot  = getP("sta_reboot"); // "on" wenn Checkbox
 
-    // Daten entgegennehmen (ohne EEPROM, nur merken/anzeigen)
+        if (newStaSsid.length()) _ssid = newStaSsid;
+        if (newStaPass.length()) _password = newStaPass;
+        if (newStaIP.length()) _locIP.fromString(newStaIP);
+        if (newStaSN.length()) _locSN.fromString(newStaSN);
+
+        saveEEPROMWifiConf(false);
+        
+        bool doReboot = (staReboot == "on");
+
+        String msg = "Konfiguration gespeichert.";
+        if (doReboot) {
+            msg += " Neustart in 2 Sekunden...";
+            _pendingRestartAt = millis() + 2000;
+            request->send(200, "text/plain", msg);
+        }
+        else         request->redirect("/config");        
+    });
+    //------------ Speichern der Access Point (AP) Konfiguration ----------------
     _server.on("/save_ap", HTTP_POST, [this](AsyncWebServerRequest *request) {
         auto getP = [&](const String& name)->String{
             return request->hasParam(name, true) ? request->getParam(name, true)->value() : "";
         };
         String newApSsid  = getP("ap_ssid");
         String newApPass  = getP("ap_pass");
+        String newApIP = getP("ap_ip");
+        String newApGW = getP("ap_gw");
+        String newApSN = getP("ap_sn");
         String apReboot   = getP("ap_reboot");
 
         if (newApSsid.length()) _apSsid = newApSsid;
         if (newApPass.length()) _apPassword = newApPass;
+        if (newApIP.length()) _apIP.fromString(newApIP);
+        if (newApGW.length()) _apGW.fromString(newApGW);
+        if (newApSN.length()) _apSN.fromString(newApSN);
 
-        Serial.printf("[CONFIG] AP: ssid=%s pass=%s\n",
-                       _apSsid.c_str(), _apPassword.c_str());
-        Serial.println("[EEPROM_WRITE] (Platzhalter) – Werte würden hier gespeichert werden.");
+        saveEEPROMWifiConf(true);
 
         bool doReboot = (apReboot == "on");
 
@@ -254,104 +317,99 @@ void WebServerClass::setupRoutes() {
             _pendingRestartAt = millis() + 2000;
         }
         request->redirect("/config");
-        // request->send(200, "text/plain", msg);
     });
-
-    // Daten entgegennehmen (ohne EEPROM, nur merken/anzeigen)
-    _server.on("/save_config", HTTP_POST, [this](AsyncWebServerRequest *request) {
-        auto getP = [&](const String& name)->String{
-            return request->hasParam(name, true) ? request->getParam(name, true)->value() : "";
-        };
-
-        String newStaSsid = getP("sta_ssid");
-        String newStaPass = getP("sta_pass");
-        String staReboot  = getP("sta_reboot"); // "on" wenn Checkbox
-
-        if (newStaSsid.length()) _ssid = newStaSsid;
-        if (newStaPass.length()) _password = newStaPass;
-
-        Serial.printf("[CONFIG] STA: ssid=%s pass=%s | AP: ssid=%s pass=%s\n",
-                      _ssid.c_str(), _password.c_str(), _apSsid.c_str(), _apPassword.c_str());
-        // Serial.println("[EEPROM_WRITE] (Platzhalter) – Werte würden hier gespeichert werden.");
-        saveEEPROMText();
-
-        bool doReboot = (staReboot == "on");
-
-        String msg = "Konfiguration gespeichert.";
-        if (doReboot) {
-            msg += " Neustart in 2 Sekunden...";
-            _pendingRestartAt = millis() + 2000;
+    //------------ Beispiel für eine weitere Seite ----------------------------
+    // z.B. für eine weitere Seite mit eigener HTML-Datei im SPIFFS
+    //----------------------------------------------------------------------------
+    _server.on("/test", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        File file = SPIFFS.open("/test.html", "r");
+        if (!file) {
+            request->send(404, "text/plain", "Datei nicht gefunden");
+            return;
         }
-        request->send(200, "text/plain", msg);
+        String page = file.readString();
+        file.close();
+        request->send(200, "text/html", page);
     });
-
-    // Uptime
-    _server.on("/uptime", HTTP_GET, [this](AsyncWebServerRequest *request){
-        request->send(200, "text/plain", String(millis() / 1000));
+    // 404 für alles andere
+    _server.onNotFound([](AsyncWebServerRequest *request) {
+        request->send(404, "text/plain", "Seite nicht gefunden");
     });
-
-    // SPIFFS-Root optional ausliefern (falls du zusätzlich Files direkt brauchst)
-    // _server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 }
 
 void WebServerClass::sendDynamicPage(AsyncWebServerRequest *request,
-                                     const String &baseContent,
+                                     const String &content,
                                      const std::map<String, String> &replacements)
 {
     String output = html_template;
-    String content = baseContent;
+    output.replace("_BODY_CONTENT_", content);
 
     for (auto const &pair : replacements) {
-        content.replace(pair.first, pair.second);
+        output.replace("%" + pair.first + "%", pair.second);
     }
-    output.replace("_BODY_CONTENT_", content);
+    
     request->send(200, "text/html", output);
 }
 
 void WebServerClass::sendDynamicFile(AsyncWebServerRequest *request,
                                      const char* path,
-                                     const std::map<String, String> &values)
+                                     const std::map<String, String> &replacements)
 {
     File file = SPIFFS.open(path, "r");
     if (!file) {
         request->send(404, "text/plain", "Datei nicht gefunden");
         return;
     }
-    String page = file.readString();
+    String content = file.readString();
     file.close();
 
-    for (auto &pair : values) {
-        page.replace("%" + pair.first + "%", pair.second);
-    }
-
-    File tmpl = SPIFFS.open("/template.html", "r");
-    if (!tmpl) {
-        request->send(500, "text/plain", "Template-Datei nicht gefunden");
-        return;
-    }
-    String base_template = tmpl.readString();
-    tmpl.close();
-
-    base_template.replace("_BODY_CONTENT_", page);
-    request->send(200, "text/html", base_template);
+    sendDynamicPage(request, content, replacements);
 }
 
 // Nur Marker – du setzt hier später deine EEPROM-Klasse ein
-void WebServerClass::loadEEPROMText() {
+void WebServerClass::loadEEPROMWifiConf(bool ap) {
 //    Serial.println("[EEPROM_READ] Platzhalter – hier später Implementierung einfügen.");
     WifiConf wifiConf;
-    ConfigManager::readWifiConf(wifiConf);
-    _ssid = String(wifiConf.ssid);
-    _password = String(wifiConf.password);
-    Serial.printf("Gelesene WLAN-Daten: SSID='%s', PASS='%s'\n", _ssid.c_str(), _password.c_str());
+    ConfigManager::readWifiConf(wifiConf, ap);
+    if (!ap) {
+        if (String(wifiConf.ssid).length() > 0) _ssid = String(wifiConf.ssid);
+        else _ssid = "";
+        if (String(wifiConf.password).length() > 0)_password = String(wifiConf.password);
+        else _password = "";
+        _locIP = wifiConf.ip;
+        _locSN = wifiConf.sn;
+    } else {
+        if (String(wifiConf.ssid).length() > 0) _apSsid = String(wifiConf.ssid);
+        else _apSsid = "ESP32-Setup";
+        if (String(wifiConf.password).length() > 0) _apPassword = String(wifiConf.password);
+        else _apPassword = "admin";
+        _apIP = wifiConf.ip;    
+        _apGW = wifiConf.gw;    
+        _apSN = wifiConf.sn;        
+    }
 }
-void WebServerClass::saveEEPROMText() {
+void WebServerClass::saveEEPROMWifiConf(bool ap) {
     // Serial.println("[EEPROM_WRITE] Platzhalter – hier später Implementierung einfügen.");
-    WifiConf wifiConf;
-    strncpy(wifiConf.ssid, _ssid.c_str(), sizeof(wifiConf.ssid));
-    strncpy(wifiConf.password, _password.c_str(), sizeof(wifiConf.password));
-    ConfigManager::writeWifiConf(wifiConf);
-    Serial.printf("Gespeicherte WLAN-Daten: SSID='%s', PASS='%s'\n", _ssid.c_str(), _password.c_str());
+    WifiConf wifiConf{};
+    if(!ap) {
+        strncpy(wifiConf.ssid, _ssid.c_str(), sizeof(wifiConf.ssid));
+        strncpy(wifiConf.password, _password.c_str(), sizeof(wifiConf.password));
+        wifiConf.ip = _locIP;
+        wifiConf.sn = _locSN;   
+    } else {
+        strncpy(wifiConf.ssid, _apSsid.c_str(), sizeof(wifiConf.ssid));
+        strncpy(wifiConf.password, _apPassword.c_str(), sizeof(wifiConf.password)); 
+        wifiConf.ip = _apIP;
+        wifiConf.gw = _apGW;
+        wifiConf.sn = _apSN;       
+    }
+    ConfigManager::writeWifiConf(wifiConf, ap);
+}
+void WebServerClass::loadEEPROMText(String &text) {
+    ConfigManager::readString(text);
+}
+void WebServerClass::saveEEPROMText(const String &text) {
+    ConfigManager::writeString(text);
 }
 
 // Helfer

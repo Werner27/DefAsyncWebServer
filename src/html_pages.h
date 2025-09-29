@@ -50,30 +50,84 @@ const char submenu01_content[] PROGMEM = R"rawliteral(
 )rawliteral";
 
 const char status_content[] PROGMEM = R"rawliteral(
-<div class="content">
+<div class="form-container">
   <h2>Status</h2>
 
   <fieldset class="block">
+    <legend>Text auf EEPROM speichern</legend>
+    <div class="form-group"><input type="text" id="eepromText" value="%EEPROM_TEXT%"></div>
+    <div class="form-actions"><button class="btn01" onclick="saveToEEPROM()">Speichern</button></div>
+  </fieldset>
+
+  <fieldset class="block">
+    <legend>Zählerstand</legend>
+    <p>Zählerstand: <span id="counterValue">%COUNTER_VALUE%</span></p>
+    <div class="form-actions"><button class="btn01" onclick="counterReset()">Reset Zähler</button></div>
+  </fieldset>
+
+  <fieldset class="block">
     <legend>Zählersteuerung</legend>
-    <div class="row"><label>Set Counter:</label><input type="text" id="set_counter" value="%SET_COUNTER%"></div>
-    <div class="row"><label>Aktueller Zählerstand:</label><input type="number" id="cur_counter" value="%CUR_COUNTER%" disabled></div>
-    <div class="row button-row"><button class="btn">Neu setzen</button></div>
+    <div class="form-group"><label>Set Counter:</label><input type="text" id="set_counter" value="%SET_COUNTER%"></div>
+    <div class="form-group"><label>Aktueller Zählerstand:</label><input type="number" id="cur_counter" value="%CUR_COUNTER%" disabled></div>
+    <div class="form-actions"><button class="btn01" onclick="setCounter()">Neu setzen</button></div>
   </fieldset>
 
   <fieldset class="block">
     <legend>JSON Status</legend>
-    <div class="row"><label>Uptime (s):</label><input id="uptime" readonly></div>
-    <div class="row"><label>Counter:</label><input id="counter" readonly></div>
-    <div class="row"><label>Modus:</label><input id="mode" readonly></div>
-    <div class="row"><label>SSID:</label><input id="ssid" readonly></div>
-    <div class="row"><label>IP:</label><input id="ip" readonly></div>
-    <div class="row"><label>Subnetz:</label><input id="subnet" readonly></div>
-    <div class="row"><label>Free Heap:</label><input id="heap" readonly></div>
-    <div class="row button-row"><button id="toggleBtn" class="btn" onclick="toggleJson()">JSON anzeigen</button></div>
+    <div class="form-group"><label>Uptime (s):</label><input id="uptime" readonly></div>
+    <div class="form-group"><label>Counter:</label><input id="counter" readonly></div>
+    <div class="form-group"><label>Modus:</label><input id="mode" readonly></div>
+    <div class="form-group"><label>SSID:</label><input id="ssid" readonly></div>
+    <div class="form-group"><label>IP:</label><input id="ip" readonly></div>
+    <div class="form-group"><label>Subnetz:</label><input id="subnet" readonly></div>
+    <div class="form-group"><label>Free Heap:</label><input id="heap" readonly></div>
+    <div class="form-actions"><button class="btn01" id="toggleBtn" onclick="toggleJson()">JSON anzeigen</button></div>
   </fieldset>
 </div>
 
 <script>
+function updateCounter() {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            document.getElementById("counterValue").innerHTML = this.responseText;
+            document.getElementById("cur_counter").value = this.responseText;
+        }
+    };
+    xhr.open("GET", "/counter", true);
+    xhr.send();
+}
+function counterReset() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "/counter_reset", true);
+    xhr.send();
+}
+function saveToEEPROM() {
+    var text = document.getElementById("eepromText").value;
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/save_eeprom", true);
+    xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            alert("Text gespeichert!");
+        }
+    };
+    xhr.send("data=" + text);
+}
+function setCounter() {
+    var value = document.getElementById("set_counter").value;
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/set_counter", true);
+    xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+        }
+    };
+    xhr.send("data=" + value);
+}
+
+setInterval(updateCounter, 1000);
+
 let intervalId = null;
 function fetchStatus() {
   fetch('/status.json')
