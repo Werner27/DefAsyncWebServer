@@ -1,8 +1,12 @@
 #ifndef WEBSERVERCLASS_H
 #define WEBSERVERCLASS_H
-
-#include <WiFi.h>
-#include <AsyncTCP.h>
+#ifdef ESP32
+    #include <WiFi.h>
+    #include <AsyncTCP.h>
+#else
+    #include <ESP8266WiFi.h>
+    #include <ESPAsyncTCP.h>
+#endif
 #include <ESPAsyncWebServer.h>
 #include <map>
 
